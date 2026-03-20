@@ -10,6 +10,86 @@ const handle = app.getRequestHandler();
 // Store for tracking player answers and game state
 const playerAnswers = new Map<string, Map<string, { answerIndex: number; timeSpent: number }>>();
 
+// Store for room timers (to auto-advance questions)
+const roomTimers = new Map<string, NodeJS.Timeout>();
+
+// Helper function to clear room timer
+function clearRoomTimer(roomCode: string) {
+  const timer = roomTimers.get(roomCode);
+  if (timer) {
+    clearTimeout(timer);
+    roomTimers.delete(roomCode);
+  }
+}
+
+// Helper function to start question timer
+function startQuestionTimer(io: SocketIOServer, roomCode: string, timeLimit: number) {
+  // Clear any existing timer
+  clearRoomTimer(roomCode);
+  
+  // Set new timer to auto-advance when time is up
+  const timer = setTimeout(() => {
+    const room = rooms.get(roomCode);
+    if (!room || room.status !== 'playing') return;
+    
+    const quiz = quizzes.get(room.quizId);
+    
+    // Mark any players who didn't answer
+    const roomAnswers = playerAnswers.get(roomCode);
+    const realPlayers = room.players.filter(p => p.name !== 'Host');
+    
+    // Give 0 points to players who didn't answer in time
+    realPlayers.forEach(player => {
+      if (!roomAnswers?.has(player.id)) {
+        // Player didn't answer - emit result with wrong answer
+        io.to(player.id).emit('answer-result', {
+          isCorrect: false,
+          points: 0,
+          correctAnswerIndex: -1,
+          streak: 0,
+        });
+      }
+    });
+    
+    // Clear answers for next question
+    playerAnswers.delete(roomCode);
+    
+    // Move to next question after a short delay
+    setTimeout(() => {
+      room.currentQuestion += 1;
+      
+      if (quiz && room.currentQuestion < quiz.questions.length) {
+        // Send next question
+        const nextQuestion = quiz.questions[room.currentQuestion];
+        io.to(roomCode).emit('new-question', {
+          question: nextQuestion,
+          questionIndex: room.currentQuestion,
+          totalQuestions: quiz.questions.length,
+        });
+        
+        // Start timer for next question
+        startQuestionTimer(io, roomCode, nextQuestion.timeLimit);
+      } else {
+        // Game over
+        const sortedPlayers = [...room.players].sort((a, b) => b.score - a.score);
+        const rankings = sortedPlayers.map((p, i) => ({ playerId: p.id, rank: i + 1 }));
+        
+        io.to(roomCode).emit('game-over', {
+          players: room.players,
+          rankings,
+        });
+        
+        room.status = 'game-over';
+      }
+      
+      rooms.set(roomCode, room);
+    }, 3000); // Wait 3 seconds before next question
+    
+  }, timeLimit * 1000 + 2000); // Time limit + 2 seconds buffer
+  
+  roomTimers.set(roomCode, timer);
+}
+
 app.prepare().then(() => {
   const server = createServer((req, res) => {
     handle(req, res);
@@ -89,6 +169,9 @@ app.prepare().then(() => {
             questionIndex: 0,
             totalQuestions: quiz.questions.length,
           });
+          
+          // Start timer for first question
+          startQuestionTimer(io, roomCodeUpper, firstQuestion.timeLimit);
         } else {
           // Mock questions for testing
           const mockQuestions = [
@@ -114,12 +197,15 @@ app.prepare().then(() => {
               timeLimit: 30,
             },
           ];
-          
+
           io.to(roomCodeUpper).emit('new-question', {
             question: mockQuestions[0],
             questionIndex: 0,
             totalQuestions: mockQuestions.length,
           });
+          
+          // Start timer for first question
+          startQuestionTimer(io, roomCodeUpper, 30);
         }
       }
     });
@@ -143,18 +229,22 @@ app.prepare().then(() => {
             totalQuestions: quiz.questions.length,
           });
           
+          // Start timer for this question
+          startQuestionTimer(io, roomCodeUpper, question.timeLimit);
+          
           // Clear answers for new question
           playerAnswers.delete(roomCodeUpper);
         } else {
           // No more questions, game over
+          clearRoomTimer(roomCodeUpper);
           const sortedPlayers = [...room.players].sort((a, b) => b.score - a.score);
           const rankings = sortedPlayers.map((p, i) => ({ playerId: p.id, rank: i + 1 }));
-          
+
           io.to(roomCodeUpper).emit('game-over', {
             players: room.players,
             rankings,
           });
-          
+
           room.status = 'game-over';
           rooms.set(roomCodeUpper, room);
         }
@@ -212,53 +302,51 @@ app.prepare().then(() => {
         roomAnswers.set(socket.id, { answerIndex, timeSpent });
       }
 
-      // Calculate streak
-      // For simplicity, we'll check if the previous answer was also correct
-      // In a real app, you'd track this per-player
-      
       // Send result back to the player
       socket.emit('answer-result', {
         isCorrect,
         points,
         correctAnswerIndex: currentQuestion.correctAnswerIndex,
-        streak: isCorrect ? 1 : 0, // Simplified streak
+        streak: isCorrect ? 1 : 0,
       });
-
-      // Check if all players have answered
+      
+      // Check if all players have answered - if so, advance immediately
+      const realPlayers = room.players.filter(p => p.name !== 'Host');
       const totalAnswers = roomAnswers?.size || 0;
-      if (totalAnswers >= room.players.length) {
-        // All players have answered, show results and move to next question
+      
+      if (totalAnswers >= realPlayers.length) {
+        // All players answered, clear timer and advance
+        clearRoomTimer(roomCodeUpper);
+        
         setTimeout(() => {
-          io.to(roomCodeUpper).emit('show-results');
+          room.currentQuestion += 1;
           
-          // Wait a bit then move to next question
-          setTimeout(() => {
-            room.currentQuestion += 1;
-            rooms.set(roomCodeUpper, room);
+          if (quiz && room.currentQuestion < quiz.questions.length) {
+            const nextQuestion = quiz.questions[room.currentQuestion];
+            io.to(roomCodeUpper).emit('new-question', {
+              question: nextQuestion,
+              questionIndex: room.currentQuestion,
+              totalQuestions: quiz.questions.length,
+            });
+            
+            // Clear answers and start new timer
+            playerAnswers.delete(roomCodeUpper);
+            startQuestionTimer(io, roomCodeUpper, nextQuestion.timeLimit);
+          } else {
+            // Game over
+            const sortedPlayers = [...room.players].sort((a, b) => b.score - a.score);
+            const rankings = sortedPlayers.map((p, i) => ({ playerId: p.id, rank: i + 1 }));
 
-            if (quiz && room.currentQuestion < quiz.questions.length) {
-              const nextQuestion = quiz.questions[room.currentQuestion];
-              io.to(roomCodeUpper).emit('new-question', {
-                question: nextQuestion,
-                questionIndex: room.currentQuestion,
-                totalQuestions: quiz.questions.length,
-              });
-              playerAnswers.delete(roomCodeUpper);
-            } else {
-              // Game over
-              const sortedPlayers = [...room.players].sort((a, b) => b.score - a.score);
-              const rankings = sortedPlayers.map((p, i) => ({ playerId: p.id, rank: i + 1 }));
-              
-              io.to(roomCodeUpper).emit('game-over', {
-                players: room.players,
-                rankings,
-              });
-              
-              room.status = 'game-over';
-              rooms.set(roomCodeUpper, room);
-            }
-          }, 3000);
-        }, 2000);
+            io.to(roomCodeUpper).emit('game-over', {
+              players: room.players,
+              rankings,
+            });
+
+            room.status = 'game-over';
+          }
+          
+          rooms.set(roomCodeUpper, room);
+        }, 2000); // Short delay to show results
       }
     });
 
@@ -268,6 +356,9 @@ app.prepare().then(() => {
       const room = rooms.get(roomCodeUpper);
       
       if (room) {
+        // Clear timer
+        clearRoomTimer(roomCodeUpper);
+        
         // Reset scores for all players
         room.players.forEach((player) => {
           player.score = 0;
@@ -276,12 +367,12 @@ app.prepare().then(() => {
         // Reset game state
         room.status = 'waiting';
         room.currentQuestion = 0;
-        
+
         rooms.set(roomCodeUpper, room);
-        
+
         // Clear tracked answers
         playerAnswers.delete(roomCodeUpper);
-        
+
         // Notify all clients that room has been reset
         io.to(roomCodeUpper).emit('room-reset', {
           players: room.players,

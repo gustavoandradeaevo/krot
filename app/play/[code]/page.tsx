@@ -184,29 +184,16 @@ export default function PlayPage() {
     };
   }, [socket]);
 
-  // Timer logic
+  // Timer logic - visual countdown only, server controls advancement
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (gameState === "playing" && timeRemaining > 0) {
       timer = setInterval(() => {
-        setTimeRemaining((prev) => {
-          if (prev <= 1) {
-            // Time's up - auto-submit with no answer
-            if (socket && currentQuestion) {
-              socket.emit("submit-answer", {
-                roomCode: roomCode.toUpperCase(),
-                answerIndex: -1,
-                timeSpent: currentQuestion.timeLimit,
-              });
-            }
-            return 0;
-          }
-          return prev - 1;
-        });
+        setTimeRemaining((prev) => Math.max(0, prev - 1));
       }, 1000);
     }
     return () => clearInterval(timer);
-  }, [gameState, timeRemaining, socket, currentQuestion, roomCode]);
+  }, [gameState, timeRemaining]);
 
   // Countdown timer
   useEffect(() => {
