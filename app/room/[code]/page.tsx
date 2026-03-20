@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { io, Socket } from "socket.io-client";
 import {
   Users,
@@ -42,7 +42,6 @@ interface Quiz {
 
 export default function RoomPage() {
   const params = useParams();
-  const router = useRouter();
   const roomCode = params.code as string;
 
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -64,6 +63,13 @@ export default function RoomPage() {
 
     newSocket.on("connect", () => {
       console.log("Host connected to server");
+      
+      // Host joins the room as well so they can receive player updates
+      newSocket.emit("join-room", {
+        roomCode: roomCode.toUpperCase(),
+        playerName: "Host",
+      });
+      
       fetchRoomData();
     });
 
@@ -95,9 +101,18 @@ export default function RoomPage() {
       }
     );
 
+    // Room reset (when Play Again is clicked)
+    socket.on("room-reset", () => {
+      const resetPlayers = players.map((p) => ({ ...p, score: 0 }));
+      setPlayers(resetPlayers);
+      setGameState("waiting");
+      setCountdown(3);
+    });
+
     return () => {
       socket.off("update-players");
       socket.off("game-over");
+      socket.off("room-reset");
     };
   }, [socket]);
 
@@ -149,15 +164,14 @@ export default function RoomPage() {
       const timer = setTimeout(() => setCountdown((prev) => prev - 1), 1000);
       return () => clearTimeout(timer);
     } else if (gameState === "countdown" && countdown === 0) {
+      // Start the game - notify server to begin
       if (socket) {
         socket.emit("start-game", roomCode.toUpperCase());
       }
+      // Host stays on this page, just change visual state
       setGameState("playing");
-      setTimeout(() => {
-        router.push(`/room/${roomCode}/host`);
-      }, 500);
     }
-  }, [gameState, countdown, roomCode, socket, router]);
+  }, [gameState, countdown, roomCode, socket]);
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(roomCode);
@@ -294,6 +308,87 @@ export default function RoomPage() {
             {countdown === 1 ? "GO!" : "Starting in..."}
           </p>
         </div>
+      </div>
+    );
+  }
+
+  // Playing screen - Host watches the game
+  if (gameState === "playing") {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <header className="glass-card border-b border-white/10 sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#FF3355] to-[#FF6B35] flex items-center justify-center">
+                  <Crown className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-black text-white">Game in Progress</h1>
+                  <p className="text-sm text-[#B8B8D1]">Watch players answer questions</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-[#B8B8D1] uppercase tracking-wide">Room</p>
+                <p className="text-3xl font-black text-white pin-display">{roomCode}</p>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+          <div className="glass-card rounded-3xl p-8 text-center">
+            <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-[#66E366] to-[#4BC44B] flex items-center justify-center animate-pulse">
+              <Zap className="w-12 h-12 text-white" />
+            </div>
+            <h2 className="text-3xl md:text-4xl font-black text-white mb-4">
+              Game is Live!
+            </h2>
+            <p className="text-xl text-[#B8B8D1] mb-8">
+              Players are answering questions in real-time
+            </p>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              <div className="glass-card rounded-2xl p-4">
+                <p className="text-3xl font-black text-white">{players.length}</p>
+                <p className="text-sm text-[#B8B8D1]">Active Players</p>
+              </div>
+              <div className="glass-card rounded-2xl p-4">
+                <p className="text-3xl font-black text-[#FF6B35]">{players.filter(p => p.name !== 'Host').length}</p>
+                <p className="text-sm text-[#B8B8D1]">Real Players</p>
+              </div>
+              <div className="glass-card rounded-2xl p-4">
+                <p className="text-3xl font-black text-[#FFCC00]">{quiz?.questions?.length || 0}</p>
+                <p className="text-sm text-[#B8B8D1]">Questions</p>
+              </div>
+              <div className="glass-card rounded-2xl p-4">
+                <p className="text-3xl font-black text-[#66E366]">Live</p>
+                <p className="text-sm text-[#B8B8D1]">Status</p>
+              </div>
+            </div>
+
+            <div className="glass-card rounded-2xl p-6">
+              <h3 className="text-lg font-black text-white mb-4 flex items-center justify-center gap-2">
+                <Users className="w-5 h-5 text-[#FF6B35]" />
+                Players in Game
+              </h3>
+              <div className="flex flex-wrap justify-center gap-2">
+                {players.filter(p => p.name !== 'Host').map((player, index) => (
+                  <div
+                    key={player.id}
+                    className="px-4 py-2 rounded-xl bg-white/10 text-white font-bold text-sm"
+                  >
+                    {player.name}: {player.score.toLocaleString()} pts
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <p className="mt-8 text-sm text-[#6B7280]">
+              The game will automatically end when all questions are answered
+            </p>
+          </div>
+        </main>
       </div>
     );
   }
@@ -468,7 +563,7 @@ export default function RoomPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button
-                onClick={() => router.push("/")}
+                onClick={() => window.location.href = "/"}
                 className="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
               >
                 <ArrowLeft className="w-6 h-6 text-white" />
