@@ -1,26 +1,312 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Kahoot-inspired vibrant colors */
+  --kahoot-red: #FF3355;
+  --kahoot-blue: #2684FF;
+  --kahoot-yellow: #FFCC00;
+  --kahoot-green: #66E366;
+  --kahoot-purple: #8854C0;
+  --kahoot-orange: #FF6B35;
+  --kahoot-pink: #FF4081;
+  
+  /* Dark backgrounds */
+  --bg-primary: #1A1A2E;
+  --bg-secondary: #16213E;
+  --bg-dark: #0F0F1A;
+  --bg-gradient-start: #1A1A2E;
+  --bg-gradient-end: #2D1B1B;
+  
+  /* Text colors */
+  --text-primary: #FFFFFF;
+  --text-secondary: #B8B8D1;
+  --text-muted: #6B7280;
+  
+  /* Accent gradients */
+  --gradient-orange: linear-gradient(135deg, #FF6B35 0%, #FF8E53 100%);
+  --gradient-dark: linear-gradient(135deg, #1A1A2E 0%, #2D1B1B 100%);
+  --gradient-vibrant: linear-gradient(135deg, #FF3355 0%, #FF8E53 50%, #FFCC00 100%);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: var(--bg-primary);
+  --color-foreground: var(--text-primary);
+  --font-sans: 'Montserrat', system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Base styles */
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+  background-attachment: fixed;
+  color: var(--text-primary);
+  font-family: 'Montserrat', system-ui, sans-serif;
+  min-height: 100vh;
+}
+
+/* Kahoot-style answer button colors */
+.answer-red {
+  background: linear-gradient(145deg, #FF3355, #CC2944);
+  border: 3px solid rgba(255, 51, 85, 0.5);
+}
+
+.answer-blue {
+  background: linear-gradient(145deg, #2684FF, #1E6AD4);
+  border: 3px solid rgba(38, 132, 255, 0.5);
+}
+
+.answer-yellow {
+  background: linear-gradient(145deg, #FFCC00, #CC9900);
+  border: 3px solid rgba(255, 204, 0, 0.5);
+}
+
+.answer-green {
+  background: linear-gradient(145deg, #66E366, #4BC44B);
+  border: 3px solid rgba(102, 227, 102, 0.5);
+}
+
+.answer-purple {
+  background: linear-gradient(145deg, #8854C0, #6B3D9E);
+  border: 3px solid rgba(136, 84, 192, 0.5);
+}
+
+/* Animation keyframes */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(255, 107, 53, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(255, 107, 53, 0.7);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bounce-in {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+/* Glass morphism cards */
+.glass-card {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #FF3355, #FF8E53, #FFCC00);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Button styles */
+.btn-primary {
+  background: linear-gradient(145deg, #FF6B35, #FF8E53);
+  box-shadow: 0 4px 15px rgba(255, 107, 53, 0.4);
+  transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(255, 107, 53, 0.6);
+}
+
+.btn-answer {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-answer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transition: left 0.5s;
+}
+
+.btn-answer:hover::before {
+  left: 100%;
+}
+
+.btn-answer:hover {
+  transform: scale(1.02) translateY(-3px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.btn-answer:active {
+  transform: scale(0.98) translateY(-1px);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--kahoot-red), var(--kahoot-orange));
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--kahoot-orange), var(--kahoot-yellow));
+}
+
+/* Input styles */
+.input-kahoot {
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.input-kahoot:focus {
+  border-color: var(--kahoot-orange);
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 20px rgba(255, 107, 53, 0.3);
+  outline: none;
+}
+
+.input-kahoot::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Card hover effects */
+.card-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-hover:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* Pin display styles */
+.pin-display {
+  font-family: 'Montserrat', monospace;
+  letter-spacing: 0.5em;
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+}
+
+/* Timer styles */
+.timer-ring {
+  stroke-dasharray: 283;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 1s linear;
+}
+
+/* Player count badge */
+.player-count {
+  background: linear-gradient(145deg, var(--kahoot-green), #4BC44B);
+  box-shadow: 0 4px 15px rgba(102, 227, 102, 0.4);
+}
+
+/* Score display */
+.score-display {
+  background: linear-gradient(145deg, var(--kahoot-yellow), #FFAA00);
+  box-shadow: 0 4px 15px rgba(255, 204, 0, 0.4);
+}
+
+/* Animated background */
+.animated-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  overflow: hidden;
+}
+
+.animated-bg::before {
+  content: '';
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255, 107, 53, 0.1) 0%, transparent 70%);
+  animation: float 20s ease-in-out infinite;
+}
+
+/* Question shapes */
+.shape-triangle::before {
+  content: '▲';
+  font-size: 1.5em;
+  margin-right: 0.5em;
+}
+
+.shape-diamond::before {
+  content: '◆';
+  font-size: 1.5em;
+  margin-right: 0.5em;
+}
+
+.shape-circle::before {
+  content: '●';
+  font-size: 1.5em;
+  margin-right: 0.5em;
+}
+
+.shape-square::before {
+  content: '■';
+  font-size: 1.5em;
+  margin-right: 0.5em;
 }
